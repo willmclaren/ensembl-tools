@@ -18,7 +18,7 @@ my $tmpfile = "$$\_test_vep_input";
 my $script = $Bin.'/../variant_effect_predictor.pl';
 my $perl   = '/usr/bin/env perl';
 my $inc    = '-I ~/Variation/modules/';
-my $cmd    = "$perl $inc $script -force -offline -dir_cache cache -i $tmpfile -o stdout";
+my $cmd    = "$perl $inc $script -force -offline -dir_cache cache -i $tmpfile -o stdout -db 73";
 
 
 ## BASIC TEST
@@ -121,7 +121,7 @@ ok($output =~ /$expected/, "variant type - multi-bp sub") or diag("Expected\n$ex
 
 # unbalanced sub
 $output = (grep {/unbalanced.+frameshift/} (split "\n", $full_output))[0];
-$expected = "ENSG00000154719\tENST00000307301\tTranscript\tframeshift_variant\t1041-1043\t999-1001\t333-334";
+$expected = "ENSG00000154719\tENST00000307301\tTranscript\tframeshift_variant,feature_truncation\t1041-1043\t999-1001\t333-334";
 ok($output =~ /$expected/, "variant type - unbalanced sub") or diag("Expected\n$expected\n\nGot\n$output");
 
 # sv - deletion
