@@ -11,7 +11,7 @@ use Data::Dumper;
 #use Bio::EnsEMBL::Test::TestUtils;
 
 # setup variables
-my ($input, $output, $full_output, $expected);
+my ($input, $output, $full_output, $expected, @lines);
 my $tmpfile = "$$\_test_vep_input";
 
 # configure script
@@ -21,10 +21,11 @@ my $inc    = '-I ~/Variation/modules/';
 my $ver    = 78;
 my $ass    = 'GRCh38';
 my $sp     = 'homo_sapiens';
-my $cmd    = "$perl $inc $script -force -offline -dir_cache $Bin\/cache -i $tmpfile -o stdout -db $ver -assembly $ass -species $sp";
+my $bascmd = "$perl $inc $script";
+my $cmd    = "$bascmd -force -offline -dir_cache $Bin\/cache -i $tmpfile -o stdout -db $ver -assembly $ass -species $sp";
 
 # unzip fasta
-`gzip -d $Bin\/cache/$sp/$ver\_$ass/test.fa.gz` if(-e "$Bin\/cache/$sp/$ver\_$ass/test.fa.gz");
+`gzip -dc $Bin\/cache/$sp/$ver\_$ass/test.fa.gz > $Bin\/cache/$sp/$ver\_$ass/test.fa` if(-e "$Bin\/cache/$sp/$ver\_$ass/test.fa.gz");
 
 
 ## BASIC TEST
@@ -53,8 +54,44 @@ $expected =
   "#Uploaded_variation\tLocation\tAllele\tGene\tFeature\t".
   "Feature_type\tConsequence\tcDNA_position\tCDS_position\t".
   "Protein_position\tAmino_acids\tCodons\tExisting_variation\tExtra";
-  
+
 ok($output eq $expected, "output header - default") or diag("Expected\n$expected\n\nGot\n$output");
+
+
+
+
+## output formats
+$input = qq{21 25606454 25606454 G/C + test};
+input($input);
+
+# vcf
+$output = `$cmd --vcf | grep -v '#'`;
+$expected = '21\s25606454\stest\sG\sC\s.\s.\sCSQ=C|ENSG00000154719|ENST00000419219|Transcript|missense_variant|284|275|92|A/G|gCc/gGc|||-1,C|ENSG00000154719|ENST00000352957|Transcript|missense_variant|317|275|92|A/G|gCc/gGc|||-1,C|ENSG00000154719|ENST00000307301|Transcript|missense_variant|317|275|92|A/G|gCc/gGc|||-1';
+ok($output =~ /$expected/, "VCF output") or diag("Expected\n$expected\n\nGot\n$output");
+
+# json
+$output = `$cmd --json`;
+ok($output =~ /^\{.*"most_severe_consequence":"missense_variant".*\}\n?$/, "JSON output");
+
+# GVF
+$output = `$cmd --gvf`;
+$expected = "21\tUser\tSNV\t25606454\t25606454.+ID=1;Variant_seq=C;Variant_effect=missense_variant 0 mRNA ENST00000419219;Variant_effect=missense_variant 0 mRNA ENST00000352957;Variant_effect=missense_variant 0 mRNA ENST00000307301;Dbxref=User:test;Reference_seq=G";
+ok($output =~ /$expected/, "GVF output") or diag("Expected\n$expected\n\nGot\n$output");
+
+# custom fields
+$output = `$cmd --fields Uploaded_variation,Feature,Consequence --pick | grep -v '#'`;
+$expected = 'test\sENST00000307301\smissense_variant';
+ok($output =~ /$expected/, "custom fields") or diag("Expected\n$expected\n\nGot\n$output");
+
+# convert VCF
+$output = `$cmd --convert vcf -o stdout | grep -v '#'`;
+$expected = '21\s25606454\stest\sG\sC';
+ok($output =~ /$expected/, "convert to VCF") or diag("Expected\n$expected\n\nGot\n$output");
+
+# convert pileup
+$output = `$cmd --convert pileup -o stdout | grep -v '#'`;
+$expected = '21\s25606454\sG\sC';
+ok($output =~ /$expected/, "convert to pileup") or diag("Expected\n$expected\n\nGot\n$output");
 
 
 ## CONSEQUENCE TYPES
@@ -95,8 +132,8 @@ $input = qq{21 25587758 25587758 C/T - rev
 21 25587759 25587758 -/T + ins
 21 25587758 25587760 GTA/TCC + multi
 21 25587758 25587760 GTA/TC + unbalanced
-21 25585656 25607517 DEL + svd 
-21 25585656 25607517 DUP + svp 
+21 25585656 25607517 DEL + svd
+21 25585656 25607517 DUP + svp
 };
 input($input);
 $full_output = `$cmd`;
@@ -201,7 +238,7 @@ ok($output =~ /$expected/, "cell type") or diag("Expected\n$expected\n\nGot\n$ou
 
 
 ## colocated stuff
-$input = qq{21 25584436 25584436 C/T +};
+$input = qq{21 25584436 25584436 C/A +};
 input($input);
 $output = `$cmd --check_existing --gmaf --maf_1kg --pubmed`;
 
@@ -227,11 +264,36 @@ ok($output =~ /$expected/, "EUR MAF") or diag("Expected\n$expected\n\nGot\n$outp
 $expected = 'PUBMED=22272099';
 ok($output =~ /$expected/, "pubmed") or diag("Expected\n$expected\n\nGot\n$output");
 
+# check alleles
+$output = `$cmd --check_alleles`;
+$expected = 'rs2282471';
+ok($output !~ /$expected/, "colocated ID") or diag("Expected not to find\n$expected\n\nGot\n$output");
+
 # somatic
 $input = qq{21 25585742 25585742 G/A +};
 input($input);
 $output = `$cmd --check_existing`;
 ok($output =~ /COSM162567.*SOMATIC\=1/, "somatic") or diag("Expected\n$expected\n\nGot\n$output");
+
+
+## frequency filtering
+$input = qq{21 25000248 25000248 C/G + test1
+21 25000264 25000264 A/G + test2};
+input($input);
+
+# filter common
+$output = `$cmd --filter_common`;
+ok($output !~ /test1/ && $output =~ /test2/, "filter common") or diag("Got\n$output");
+
+# specific filter
+$output = `$cmd --check_frequency --freq_pop 1kg_asn --freq_freq 0.04 --freq_gt_lt lt --freq_filter include`;
+ok($output !~ /test1/ && $output =~ /test2/, "check frequency 1");
+
+$output = `$cmd --check_frequency --freq_pop 1kg_asn --freq_freq 0.04 --freq_gt_lt lt --freq_filter exclude`;
+ok($output =~ /test1/ && $output !~ /test2/, "check frequency 2");
+
+$output = `$cmd --check_frequency --freq_pop 1kg_asn --freq_freq 0.04 --freq_gt_lt gt --freq_filter include`;
+ok($output =~ /test1/ && $output !~ /test2/, "check frequency 3");
 
 
 ## external IDs etc
@@ -288,7 +350,7 @@ ok($output =~ /$expected/, "protein domains") or diag("Expected\n$expected\n\nGo
 
 ## pick-type options
 $full_output = `$cmd --pick`;
-my @lines = grep {!/^\#/} (split "\n", $full_output);
+@lines = grep {!/^\#/} (split "\n", $full_output);
 
 ok(scalar @lines == 1, "pick - one line");
 ok($lines[0] =~ /ENST00000307301/, "pick - correct transcript");
@@ -299,6 +361,16 @@ $full_output = `$cmd --per_gene`;
 
 ok(scalar @lines == 2, "per_gene");
 
+# summary
+$output = `$cmd --summary`;
+$expected = '\smissense_variant,upstream_gene_variant,intron_variant\s';
+ok($output =~ /$expected/, "summary") or diag("Expected\n$expected\n\nGot\n$output");
+
+# most severe
+$output = `$cmd --most_severe`;
+$expected = '\smissense_variant\s';
+ok($output =~ /$expected/, "most severe") or diag("Expected\n$expected\n\nGot\n$output");
+
 # pick order
 $input = '21 25716535 25716535 A/G +';
 input($input);
@@ -307,6 +379,44 @@ my $o1 = `$cmd --pick --pick_order rank,length | grep -v '#'`;
 my $o2 = `$cmd --pick | grep -v '#'`;
 
 ok($o1 ne $o2 && $o1 =~ /ENST00000480456/ && $o2 =~ /ENST00000400532/, "pick order") or diag("--pick_order rank,length: $o1\ndefault order: $o2\n");
+
+# pick allele
+$input = '21 25716535 25716535 A/G/T +';
+input($input);
+$full_output = `$cmd --pick_allele`;
+@lines = grep {!/^\#/} (split "\n", $full_output);
+ok(scalar @lines == 2, "pick allele");
+
+
+## other
+
+# check ref
+$input = qq{21 25587758 test1 G A . . .
+21 25587758 test2 C A . . .};
+input($input);
+
+$output = `$cmd --check_ref`;
+ok($output =~ /test1/ && $output !~ /test2/, "check ref");
+
+# coding only
+$input = '21 25587758 rs116645811 G A . . .';
+input($input);
+$output = `$cmd --coding_only`;
+@lines = grep {!/^\#/} split("\n", $output);
+ok(scalar @lines == 1, "coding only") or diag("expected 1 line, got ".(scalar @lines));
+
+# no intergenic
+$input = '21 25482183 intergenic1 A G';
+input($input);
+$output = `$cmd --no_intergenic`;
+ok($output !~ /intergenic/, "no intergenic");
+
+# chr
+$input = qq{20 25587758 test1 G A . . .
+21 25587758 test2 C A . . .};
+input($input);
+$output = `$cmd --chr 21`;
+ok($output !~ /test1/ && $output =~ /test2/, "chr");
 
 ## INPUTS THAT CAUSE ERROR
 
@@ -322,6 +432,8 @@ ok($o1 ne $o2 && $o1 =~ /ENST00000480456/ && $o2 =~ /ENST00000400532/, "pick ord
 ###########
 
 unlink($tmpfile) if -e $tmpfile;
+unlink("$Bin\/cache/$sp/$ver\_$ass/test.fa");
+unlink("$Bin\/cache/$sp/$ver\_$ass/test.fa.index");
 done_testing();
 
 
