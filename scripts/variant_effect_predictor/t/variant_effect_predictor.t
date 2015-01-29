@@ -406,8 +406,9 @@ ok(scalar @lines == 2, "per_gene");
 
 # summary
 $output = `$cmd --summary`;
-$expected = '\smissense_variant,upstream_gene_variant,intron_variant\s';
-ok($output =~ /$expected/, "summary") or diag("Expected\n$expected\n\nGot\n$output");
+$output =~ m/\s([\w,]*missense[\w,]*)\s/;
+my %cons = map {$_ => 1} split(',', $1 || '');
+ok($cons{missense_variant} && $cons{intron_variant} && $cons{upstream_gene_variant}, "summary") or diag("Got\n$output");
 
 # most severe
 $output = `$cmd --most_severe`;
