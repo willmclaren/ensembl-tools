@@ -58,11 +58,8 @@ $expected =
 ok($output eq $expected, "output header - default") or diag("Expected\n$expected\n\nGot\n$output");
 
 
-
-
 ## output formats
-$input = qq{21 25606454 25606454 G/C + test};
-input($input);
+input(qq{21 25606454 25606454 G/C + test});
 
 # vcf
 $output = `$cmd --vcf | grep -v '#'`;
@@ -92,6 +89,12 @@ ok($output =~ /$expected/, "convert to VCF") or diag("Expected\n$expected\n\nGot
 $output = `$cmd --convert pileup -o stdout | grep -v '#'`;
 $expected = '21\s25606454\sG\sC';
 ok($output =~ /$expected/, "convert to pileup") or diag("Expected\n$expected\n\nGot\n$output");
+
+# individual
+$input = qq{##fileformat=VCFv4.0
+#CHROM POS ID REF ALT QUAL FILTER INFO FORMAT A B
+21 25587758 rs116645811 G A . . . GT 1|1 0|0};
+
 
 
 ## CONSEQUENCE TYPES
@@ -180,8 +183,7 @@ ok($output =~ /$expected/, "variant type - structural variation - duplication") 
 ##########
 
 ## pathogenicity
-$input = qq{21 25606454 25606454 G/C +};
-input($input);
+input(qq{21 25606454 25606454 G/C +});
 $full_output = `$cmd --sift b --polyphen b`;
 
 # sift
@@ -209,8 +211,7 @@ ok($output =~ /$expected/, "HGVSp") or diag("Expected\n$expected\n\nGot\n$output
 
 
 ## regulation
-$input = qq{21 25487468 25487468 A/T +};
-input($input);
+input(qq{21 25487468 25487468 A/T +});
 $full_output = `$cmd --regulatory`;
 
 # reg feat
@@ -236,10 +237,28 @@ $output = (grep {/ENSR00000612061/} (split "\n", $full_output))[0];
 $expected = 'promoter_flanking_region';
 ok($output =~ /$expected/, "cell type") or diag("Expected\n$expected\n\nGot\n$output");
 
+# allele number
+input('21 25587758 rs116645811 G A,C . . .');
+@lines = split("\n", `$cmd --allele_number | grep -v '#'`);
+ok(
+  (grep {/T\/M/} grep {/ALLELE_NUM=1/} @lines) &&
+  (grep {/T\/R/} grep {/ALLELE_NUM=2/} @lines),
+  "allele number"
+) or diag "Got\n".join("\n", @lines);
+
+# total length
+$output = `$cmd --total_length`;
+ok($output =~ /1043\/1199\s+1001\/1062\s+334\/353/, "total length");
+
+# no escape
+input('21 25587736 esc C T . . .');
+$output = `$cmd --hgvs`;
+my $no_esc = `$cmd --hgvs --no_escape`;
+ok($no_esc =~ /p\.=/ && $output =~ /p\.\%3D/, "no escape");
+
 
 ## colocated stuff
-$input = qq{21 25584436 25584436 C/A +};
-input($input);
+input(qq{21 25584436 25584436 C/A +});
 $output = `$cmd --check_existing --gmaf --maf_1kg --pubmed`;
 
 # colocated ID
@@ -270,8 +289,7 @@ $expected = 'rs2282471';
 ok($output !~ /$expected/, "colocated ID") or diag("Expected not to find\n$expected\n\nGot\n$output");
 
 # somatic
-$input = qq{21 25585742 25585742 G/A +};
-input($input);
+input(qq{21 25585742 25585742 G/A +});
 $output = `$cmd --check_existing`;
 ok($output =~ /COSM162567.*SOMATIC\=1/, "somatic") or diag("Expected\n$expected\n\nGot\n$output");
 
@@ -297,8 +315,7 @@ ok($output =~ /test1/ && $output !~ /test2/, "check frequency 3");
 
 
 ## external IDs etc
-$input = '21 25587758 rs116645811 G A . . .';
-input($input);
+input('21 25587758 rs116645811 G A . . .');
 $full_output = `$cmd --ccds --canonical --protein --uniprot --symbol --biotype --tsl --xref_refseq --numbers --domains`;
 $output = (grep {/ENST00000352957/} (split "\n", $full_output))[0];
 
@@ -347,6 +364,29 @@ ok($output =~ /$expected/, "exon number") or diag("Expected\n$expected\n\nGot\n$
 $expected = 'DOMAINS=Low_complexity_\(Seg\):Seg';
 ok($output =~ /$expected/, "protein domains") or diag("Expected\n$expected\n\nGot\n$output");
 
+# everything
+$output = `$cmd --everything | grep -v '#'`;
+ok(
+  $output =~ /SYMBOL/ &&
+  $output =~ /BIOTYPE/ &&
+  $output =~ /TSL/ &&
+  $output =~ /CCDS/ &&
+  $output =~ /ENSP/ &&
+  $output =~ /SWISSPROT/ &&
+  $output =~ /INTRON/ &&
+  $output =~ /EXON/ &&
+  $output =~ /HGVSc/ &&
+  $output =~ /HGVSp/ &&
+  $output =~ /GMAF/ &&
+  $output =~ /AFR_MAF/ &&
+  $output =~ /AA_MAF/ &&
+  $output =~ /CANONICAL/ &&
+  $output =~ /CCDS/ &&
+  $output =~ /SIFT/ &&
+  $output =~ /PolyPhen/ &&
+  $output =~ /DOMAINS/,
+  "everything"
+) or diag("Got\n$output");
 
 ## pick-type options
 $full_output = `$cmd --pick`;
@@ -372,8 +412,7 @@ $expected = '\smissense_variant\s';
 ok($output =~ /$expected/, "most severe") or diag("Expected\n$expected\n\nGot\n$output");
 
 # pick order
-$input = '21 25716535 25716535 A/G +';
-input($input);
+input('21 25716535 25716535 A/G +');
 
 my $o1 = `$cmd --pick --pick_order rank,length | grep -v '#'`;
 my $o2 = `$cmd --pick | grep -v '#'`;
@@ -381,8 +420,7 @@ my $o2 = `$cmd --pick | grep -v '#'`;
 ok($o1 ne $o2 && $o1 =~ /ENST00000480456/ && $o2 =~ /ENST00000400532/, "pick order") or diag("--pick_order rank,length: $o1\ndefault order: $o2\n");
 
 # pick allele
-$input = '21 25716535 25716535 A/G/T +';
-input($input);
+input('21 25716535 25716535 A/G/T +');
 $full_output = `$cmd --pick_allele`;
 @lines = grep {!/^\#/} (split "\n", $full_output);
 ok(scalar @lines == 2, "pick allele");
@@ -399,15 +437,13 @@ $output = `$cmd --check_ref`;
 ok($output =~ /test1/ && $output !~ /test2/, "check ref");
 
 # coding only
-$input = '21 25587758 rs116645811 G A . . .';
-input($input);
+input('21 25587758 rs116645811 G A . . .');
 $output = `$cmd --coding_only`;
 @lines = grep {!/^\#/} split("\n", $output);
 ok(scalar @lines == 1, "coding only") or diag("expected 1 line, got ".(scalar @lines));
 
 # no intergenic
-$input = '21 25482183 intergenic1 A G';
-input($input);
+input('21 25482183 intergenic1 A G');
 $output = `$cmd --no_intergenic`;
 ok($output !~ /intergenic/, "no intergenic");
 
@@ -417,6 +453,135 @@ $input = qq{20 25587758 test1 G A . . .
 input($input);
 $output = `$cmd --chr 21`;
 ok($output !~ /test1/ && $output =~ /test2/, "chr");
+
+# fork
+$input = qq{21      25607440        rs61735760      C       T       .       .       .
+21      25606638        rs3989369       A       G       .       .       .
+21      25606478        rs75377686      T       C       .       .       .
+21      25603925        rs7278284       C       T       .       .       .
+21      25603910        rs7278168       C       T       .       .       .
+21      25603832        rs116331755     A       G       .       .       .
+21      25592893        rs1057885       T       C       .       .       .
+21      25592860        rs10576 T       C       .       .       .
+21      25592836        rs1135638       G       A       .       .       .
+21      25587758        rs116645811     G       A       .       .       .};
+input($input);
+$output = `$cmd --fork 2 --vcf | grep -v '#' | cut -f 2`;
+$expected = "25607440\n25606638\n25606478\n25603925\n25603910\n25603832\n25592893\n25592860\n25592836\n25587758";
+ok($output =~ $expected, "fork order") or diag("Expected\n$expected\n\nGot\n$output");
+
+# merged cache
+input(qq{21 25606454 25606454 G/C +});
+@lines = grep {!/^\#/} split("\n", `$cmd --merged`);
+my $ens = join("\n", grep {/SOURCE=Ensembl/} @lines);
+my $ref = join("\n", grep {/SOURCE=RefSeq/} @lines);
+ok($ens =~ /ENST00000419219/, "merged cache Ensembl") or diag("Got\n$ens");
+ok($ref =~ /NM_080794/, "merged cache RefSeq") or diag("Got\n$ref");
+
+# stats file
+$output = `$bascmd -force -offline -dir_cache $Bin\/cache -i $tmpfile -o $tmpfile\.out -db $ver -assembly $ass -species $sp`;
+ok(-e $tmpfile.'.out_summary.html', "stats file");
+open STATS, $tmpfile.'.out_summary.html';
+@lines = <STATS>;
+close STATS;
+ok((grep {/\<title\>VEP summary\<\/title\>/} @lines), "stats file header");
+ok((grep {/\'missense_variant\'\,3/} @lines), "stats missense");
+
+# text stats file
+$output = `$bascmd -force -offline -dir_cache $Bin\/cache -i $tmpfile -o $tmpfile\.out -db $ver -assembly $ass -species $sp -stats_text`;
+ok(-e $tmpfile.'.out_summary.txt', "stats txt file");
+open STATS, $tmpfile.'.out_summary.txt';
+@lines = <STATS>;
+close STATS;
+ok((grep {/Overlapped transcripts\s+3/} @lines), "stats txt file overlapped transcripts");
+
+unlink($tmpfile.'.out');
+unlink($tmpfile.'.out_summary.txt');
+unlink($tmpfile.'.out_summary.html');
+
+
+## CUSTOM FILES
+if(`which tabix` =~ /tabix/) {
+  $input = qq{21      25592860        rs10576 T       C       .       .       .
+21      25592836        rs1135638       G       A       .       .       .
+21      25587758        rs116645811     G       A       .       .       .};
+  input($input);
+  
+  # bed
+  $output = `$cmd --custom $Bin\/testdata/test.bed.gz,testbed,bed,overlap,0`;
+  ok($output =~ /bed1/ && $output =~ /bed2/, "custom bed");
+  
+  # vcf
+  $output = `$cmd --custom $Bin\/testdata/test.vcf.gz,testvcf,vcf,exact,0,ATTR`;
+  ok($output =~ /vcf1/ && $output =~ /vcf2/ && $output =~ /vcf3/, "custom vcf");
+  ok($output =~ /testvcf_ATTR=test/, "custom vcf INFO");
+}
+else {
+  print STDERR "# tabix not found, skipping custom file tests\n";
+}
+
+
+## PLUGINS
+input('21 25587758 rs116645811 G A . . .');
+$output = `$cmd --dir_plugins $Bin\/testdata --plugin TestPlugin`;
+ok($output =~ /## TestPlugin\s+:\s+Test plugin/, "plugin header") or diag("Got\n$output");
+ok($output =~ /TestPlugin=ENST00000567517/, "plugin data") or diag("Got\n$output");
+
+
+## DATABASE
+if(`ping -c 1 ensembldb.ensembl.org` =~ /bytes from ensembl/) {
+  
+  my $dbcmd = "$bascmd -force -database -i $tmpfile -o stdout -db $ver -assembly $ass -species $sp";
+  
+  # ID as input
+  input('rs116645811');
+  $output = `$dbcmd`;
+  ok($output =~ /ENST00000567517/, "DB - ID input") or diag("Got\n$output");
+  
+  # use cache and database
+  input('rs2282471');
+  $output = `$dbcmd -force -cache -dir_cache $Bin\/cache -i $tmpfile -o stdout -db $ver -assembly $ass -species $sp -maf_1kg`;
+  ok($output =~ /AFR_MAF=T:0.04/, "DB - with cache") or diag("Got\n$output");
+  
+  # HGVS as input
+  input('21:g.25606454G>C');
+  $output = `$dbcmd`;
+  ok($output =~ /missense_variant/, "DB - HGVS input - genomic") or diag("Got\n$output");
+  
+  input('ENST00000419219:c.275C>G');
+  $output = `$dbcmd`;
+  ok($output =~ /missense_variant/, "DB - HGVS input - coding") or diag("Got\n$output");
+  
+  input('ENSP00000355627:p.Ser206Phe');
+  $output = `$dbcmd`;
+  ok($output =~ /missense_variant/, "DB - HGVS input - protein") or diag("Got\n$output");
+  
+  input('AGT:c.803T>C');
+  $output = `$dbcmd`;
+  ok($output =~ /missense_variant/, "DB - HGVS input - gene symbol") or diag("Got\n$output");
+  
+  input('LRG_101t1:c.1019T>C');
+  $output = `$dbcmd`;
+  ok($output =~ /missense_variant/, "DB - HGVS input - LRG") or diag("Got\n$output");
+  
+  input('NM_080794.3:c.275C>G');
+  $output = `$dbcmd --refseq`;
+  ok($output =~ /missense_variant/, "DB - HGVS input - RefSeq") or diag("Got\n$output");
+  
+  # check sv
+  $input = '21 25491461 test C G . . .';
+  input($input);
+  $output = `$dbcmd --check_sv`;
+  ok($output =~ /esv2669708/, "DB - check SV") or diag("Expected esv2669708\n\nGot\n$output")
+}
+else {
+  print STDERR "# could not contact ensembldb.ensembl.org, skipping DB tests\n";
+}
+
+
+## BUILD
+
+
 
 ## INPUTS THAT CAUSE ERROR
 
