@@ -94,6 +94,9 @@ ok($output =~ /$expected/, "convert to pileup") or diag("Expected\n$expected\n\n
 $input = qq{##fileformat=VCFv4.0
 #CHROM POS ID REF ALT QUAL FILTER INFO FORMAT A B
 21 25587758 rs116645811 G A . . . GT 1|1 0|0};
+input($input);
+$output = `$cmd --individual all`;
+ok($output =~ /IND=A/ && $output !~ /IND=B/ && $output =~ /ZYG=HOM/, "individual");
 
 
 
