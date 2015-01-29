@@ -532,7 +532,7 @@ ok($output =~ /TestPlugin=ENST00000567517/, "plugin data") or diag("Got\n$output
 
 
 ## DATABASE
-if(`ping -c 1 ensembldb.ensembl.org` =~ /bytes from ensembl/) {
+if(`ping -c 1 ensembldb.ensembl.org` =~ /bytes from/) {
   
   my $dbcmd = "$bascmd -force -database -i $tmpfile -o stdout -db $ver -assembly $ass -species $sp";
   
