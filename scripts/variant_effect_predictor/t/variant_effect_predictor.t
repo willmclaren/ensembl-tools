@@ -15,12 +15,22 @@ my ($input, $output, $full_output, $expected, @lines);
 my $tmpfile = "$$\_test_vep_input";
 
 # configure script
+open CONF, "$Bin\/test.conf" or die "ERROR: Could not read from conf file $Bin\/test.conf\n";
+my $config;
+while(<CONF>) {
+  chomp;
+  my ($k, $v) = split;
+  $config->{$k} = $v;
+}
+close CONF;
+
+my $ver    = $config->{version};
+my $ass    = $config->{assembly};
+my $sp     = $config->{species};
 my $script = $Bin.'/../variant_effect_predictor.pl';
 my $perl   = '/usr/bin/env perl';
-my $inc    = '-I ~/Variation/modules/';
-my $ver    = 78;
-my $ass    = 'GRCh38';
-my $sp     = 'homo_sapiens';
+my $inc    = '-I ~/Variation/modules/ -I $Bin\../';
+
 my $bascmd = "$perl $inc $script";
 my $cmd    = "$bascmd -force -offline -dir_cache $Bin\/cache -i $tmpfile -o stdout -db $ver -assembly $ass -species $sp";
 
