@@ -82,8 +82,29 @@ ok($output =~ /^\{.*"most_severe_consequence":"missense_variant".*\}\n?$/, "JSON
 
 # GVF
 $output = `$cmd --gvf`;
-$expected = "21\tUser\tSNV\t25606454\t25606454.+ID=1;Variant_seq=C;Variant_effect=missense_variant 0 mRNA ENST00000419219;Variant_effect=missense_variant 0 mRNA ENST00000352957;Variant_effect=missense_variant 0 mRNA ENST00000307301;Dbxref=User:test;Reference_seq=G";
-ok($output =~ /$expected/, "GVF output") or diag("Expected\n$expected\n\nGot\n$output");
+$expected = "21\tUser\tSNV\t25606454\t25606454";
+chomp $output;
+ok($output =~ /$expected/, "GVF detail") or diag("Expected\n$expected\n\nGot\n$output");
+
+my $exp_gvf_hash = {
+  ID => { 1 => 1 },
+  Variant_seq => { 'C' => 1 },
+  Dbxref => { 'User:test' => 1},
+  Reference_seq => { 'G' => 1 },
+  Variant_effect => {
+    'missense_variant 0 mRNA ENST00000419219' => 1,
+    'missense_variant 0 mRNA ENST00000352957' => 1,
+    'missense_variant 0 mRNA ENST00000307301' => 1,
+  },
+};
+
+my $out_hash;
+foreach my $chunk(split(";", (split("\t", $output))[-1])) {
+  my ($k, $v) = split("=", $chunk);
+  $out_hash->{$k}->{$v} = 1;
+}
+
+is_deeply($out_hash, $exp_gvf_hash, "GVF consequence");
 
 # custom fields
 $output = `$cmd --fields Uploaded_variation,Feature,Consequence --pick | grep -v '#'`;
