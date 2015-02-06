@@ -22,7 +22,8 @@ before_install:
     - cd ../
 
 install:
-    - cpanm -v --installdeps --with-recommends --notest --cpanfile ensembl/cpanfile .  
+    - cpanm -v --installdeps --with-recommends --notest --cpanfile ensembl/cpanfile .
+    - cpanm -v --installdeps --notest --cpanfile ensembl-variation/cpanfile .
     - cpanm -n Devel::Cover::Report::Coveralls
 
 script: "./travisci/harness.sh"
