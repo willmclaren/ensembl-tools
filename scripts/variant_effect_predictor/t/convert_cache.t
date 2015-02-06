@@ -8,6 +8,8 @@ BEGIN { $| = 1;
 use FindBin qw($Bin);
 use Data::Dumper;
 use File::Copy;
+use lib $Bin.'/../';
+use Bio::EnsEMBL::Variation::Utils::VEP;
 
 # check for tabix and bgzip
 unless(`which tabix` =~ /tabix/ && `which bgzip` =~ /bgzip/) {
@@ -15,6 +17,14 @@ unless(`which tabix` =~ /tabix/ && `which bgzip` =~ /bgzip/) {
   done_testing();
   exit(0);
 }
+
+# find where ensembl-variation is installed
+my $mod_path = 'Bio/EnsEMBL/Variation/Utils/VEP.pm';
+my $var_path = $INC{$mod_path};
+die("ERROR: Could not find path to ensembl-variation modules\n") unless $var_path;
+$var_path =~ s/$mod_path//;
+my $data_path = $var_path.'/t/testdata/';
+die("ERROR: Could not find test data path $data_path\n") unless -d $data_path;
 
 # configure script
 open CONF, "$Bin\/test.conf" or die "ERROR: Could not read from conf file $Bin\/test.conf\n";
@@ -33,16 +43,16 @@ my $sp  = $config->{species};
 my $script = $Bin.'/../convert_cache.pl';
 my $perl   = '/usr/bin/env perl';
 my $bascmd = "$perl $script";
-my $cmd    = "$bascmd -version $ver\_$ass -species $sp -dir $Bin\/cache/ -quiet";
+my $cmd    = "$bascmd -version $ver\_$ass -species $sp -dir $data_path\/vep-cache/ -quiet";
 
 # backup info.txt
-copy("$Bin\/cache/$sp/$ver\_$ass/info.txt", "$Bin\/cache/$sp/$ver\_$ass/info.txt.bak");
+copy("$data_path\/vep-cache/$sp/$ver\_$ass/info.txt", "$data_path\/vep-cache/$sp/$ver\_$ass/info.txt.bak");
 
 # run script
 ok(!system($cmd), "run script");
 
 # check info.txt
-open INFO, "$Bin\/cache/$sp/$ver\_$ass/info.txt";
+open INFO, "$data_path\/vep-cache/$sp/$ver\_$ass/info.txt";
 my @lines = <INFO>;
 close INFO;
 
@@ -57,10 +67,10 @@ my @split = split(',', $cols);
 $col_nums{$split[$_]} = $_ for 0..$#split;
 
 # check files exist
-ok(-e "$Bin\/cache/$sp/$ver\_$ass/21/all_vars.gz", "all_vars.gz");
-ok(-e "$Bin\/cache/$sp/$ver\_$ass/21/all_vars.gz.tbi", "all_vars.gz.tbi");
+ok(-e "$data_path\/vep-cache/$sp/$ver\_$ass/21/all_vars.gz", "all_vars.gz");
+ok(-e "$data_path\/vep-cache/$sp/$ver\_$ass/21/all_vars.gz.tbi", "all_vars.gz.tbi");
 
-open VARS, "gzip -dc $Bin\/cache/$sp/$ver\_$ass/21/all_vars.gz |";
+open VARS, "gzip -dc $data_path\/vep-cache/$sp/$ver\_$ass/21/all_vars.gz |";
 my (%col_counts, $pos_non_ints);
 
 while(<VARS>) {
@@ -80,9 +90,9 @@ ok(!$pos_non_ints, "all_vars.gz - start int");
 
 
 # restore cache to previous state
-unlink("$Bin\/cache/$sp/$ver\_$ass/info.txt");
-move("$Bin\/cache/$sp/$ver\_$ass/info.txt.bak", "$Bin\/cache/$sp/$ver\_$ass/info.txt");
-unlink("$Bin\/cache/$sp/$ver\_$ass/21/all_vars.gz");
-unlink("$Bin\/cache/$sp/$ver\_$ass/21/all_vars.gz.tbi");
+unlink("$data_path\/vep-cache/$sp/$ver\_$ass/info.txt");
+move("$data_path\/vep-cache/$sp/$ver\_$ass/info.txt.bak", "$data_path\/vep-cache/$sp/$ver\_$ass/info.txt");
+unlink("$data_path\/vep-cache/$sp/$ver\_$ass/21/all_vars.gz");
+unlink("$data_path\/vep-cache/$sp/$ver\_$ass/21/all_vars.gz.tbi");
 
 done_testing();

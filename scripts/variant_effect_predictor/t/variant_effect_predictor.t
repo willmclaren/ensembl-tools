@@ -7,6 +7,8 @@ BEGIN { $| = 1;
 
 use FindBin qw($Bin);
 use Data::Dumper;
+use lib $Bin.'/../';
+use Bio::EnsEMBL::Variation::Utils::VEP;
 
 #use Bio::EnsEMBL::Test::TestUtils;
 
@@ -24,18 +26,25 @@ while(<CONF>) {
 }
 close CONF;
 
+# find where ensembl-variation is installed
+my $mod_path = 'Bio/EnsEMBL/Variation/Utils/VEP.pm';
+my $var_path = $INC{$mod_path};
+die("ERROR: Could not find path to ensembl-variation modules\n") unless $var_path;
+$var_path =~ s/$mod_path//;
+my $data_path = $var_path.'/t/testdata/';
+die("ERROR: Could not find test data path $data_path\n") unless -d $data_path;
+
 my $ver    = $config->{version};
 my $ass    = $config->{assembly};
 my $sp     = $config->{species};
 my $script = $Bin.'/../variant_effect_predictor.pl';
 my $perl   = '/usr/bin/env perl';
 my $inc    = '-I ~/Variation/modules/ -I $Bin\../';
-
 my $bascmd = "$perl $inc $script";
-my $cmd    = "$bascmd -force -offline -dir_cache $Bin\/cache -i $tmpfile -o stdout -db $ver -assembly $ass -species $sp";
+my $cmd    = "$bascmd -force -offline -dir_cache $data_path/vep-cache/ -i $tmpfile -o stdout -db $ver -assembly $ass -species $sp";
 
 # unzip fasta
-`gzip -dc $Bin\/cache/$sp/$ver\_$ass/test.fa.gz > $Bin\/cache/$sp/$ver\_$ass/test.fa` if(-e "$Bin\/cache/$sp/$ver\_$ass/test.fa.gz");
+`gzip -dc $data_path/vep-cache/$sp/$ver\_$ass/test.fa.gz > $data_path/vep-cache/$sp/$ver\_$ass/test.fa` if(-e "$data_path/vep-cache/$sp/$ver\_$ass/test.fa.gz");
 
 
 ## BASIC TEST
@@ -514,7 +523,7 @@ ok($ens =~ /ENST00000419219/, "merged cache Ensembl") or diag("Got\n$ens");
 ok($ref =~ /NM_080794/, "merged cache RefSeq") or diag("Got\n$ref");
 
 # stats file
-$output = `$bascmd -force -offline -dir_cache $Bin\/cache -i $tmpfile -o $tmpfile\.out -db $ver -assembly $ass -species $sp`;
+$output = `$bascmd -force -offline -dir_cache $data_path/vep-cache -i $tmpfile -o $tmpfile\.out -db $ver -assembly $ass -species $sp`;
 ok(-e $tmpfile.'.out_summary.html', "stats file");
 open STATS, $tmpfile.'.out_summary.html';
 @lines = <STATS>;
@@ -523,7 +532,7 @@ ok((grep {/\<title\>VEP summary\<\/title\>/} @lines), "stats file header");
 ok((grep {/\'missense_variant\'\,3/} @lines), "stats missense");
 
 # text stats file
-$output = `$bascmd -force -offline -dir_cache $Bin\/cache -i $tmpfile -o $tmpfile\.out -db $ver -assembly $ass -species $sp -stats_text`;
+$output = `$bascmd -force -offline -dir_cache $data_path/vep-cache -i $tmpfile -o $tmpfile\.out -db $ver -assembly $ass -species $sp -stats_text`;
 ok(-e $tmpfile.'.out_summary.txt', "stats txt file");
 open STATS, $tmpfile.'.out_summary.txt';
 @lines = <STATS>;
@@ -543,11 +552,11 @@ if(`which tabix` =~ /tabix/) {
   input($input);
   
   # bed
-  $output = `$cmd --custom $Bin\/testdata/test.bed.gz,testbed,bed,overlap,0`;
+  $output = `$cmd --custom $data_path/test.bed.gz,testbed,bed,overlap,0`;
   ok($output =~ /bed1/ && $output =~ /bed2/, "custom bed");
   
   # vcf
-  $output = `$cmd --custom $Bin\/testdata/test.vcf.gz,testvcf,vcf,exact,0,ATTR`;
+  $output = `$cmd --custom $data_path/test.vcf.gz,testvcf,vcf,exact,0,ATTR`;
   ok($output =~ /vcf1/ && $output =~ /vcf2/ && $output =~ /vcf3/, "custom vcf");
   ok($output =~ /testvcf_ATTR=test/, "custom vcf INFO");
 }
@@ -558,7 +567,7 @@ else {
 
 ## PLUGINS
 input('21 25587758 rs116645811 G A . . .');
-$output = `$cmd --dir_plugins $Bin\/testdata --plugin TestPlugin`;
+$output = `$cmd --dir_plugins $Bin\/testdata/ --plugin TestPlugin`;
 ok($output =~ /## TestPlugin\s+:\s+Test plugin/, "plugin header") or diag("Got\n$output");
 ok($output =~ /TestPlugin=ENST00000567517/, "plugin data") or diag("Got\n$output");
 
@@ -575,7 +584,7 @@ if(`ping -c 1 ensembldb.ensembl.org` =~ /bytes from/) {
   
   # use cache and database
   input('rs2282471');
-  $output = `$dbcmd -force -cache -dir_cache $Bin\/cache -i $tmpfile -o stdout -db $ver -assembly $ass -species $sp -maf_1kg`;
+  $output = `$dbcmd -force -cache -dir_cache $data_path/vep-cache/ -i $tmpfile -o stdout -db $ver -assembly $ass -species $sp -maf_1kg`;
   ok($output =~ /AFR_MAF=T:0.04/, "DB - with cache") or diag("Got\n$output");
   
   # HGVS as input
@@ -632,8 +641,8 @@ else {
 ###########
 
 unlink($tmpfile) if -e $tmpfile;
-unlink("$Bin\/cache/$sp/$ver\_$ass/test.fa");
-unlink("$Bin\/cache/$sp/$ver\_$ass/test.fa.index");
+unlink("$data_path/vep-cache/$sp/$ver\_$ass/test.fa");
+unlink("$data_path/vep-cache/$sp/$ver\_$ass/test.fa.index");
 done_testing();
 
 
