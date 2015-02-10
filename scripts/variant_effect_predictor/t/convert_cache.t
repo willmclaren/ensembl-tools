@@ -11,13 +11,6 @@ use File::Copy;
 use lib $Bin.'/../';
 use Bio::EnsEMBL::Variation::Utils::VEP;
 
-# check for tabix and bgzip
-unless(`which tabix` =~ /tabix/ && `which bgzip` =~ /bgzip/) {
-  print STDERR "# tabix and/or bgzip not found, skipping convert_cache tests\n";
-  done_testing();
-  exit(0);
-}
-
 # find where ensembl-variation is installed
 my $mod_path = 'Bio/EnsEMBL/Variation/Utils/VEP.pm';
 my $var_path = $INC{$mod_path};
@@ -44,6 +37,15 @@ my $script = $Bin.'/../convert_cache.pl';
 my $perl   = '/usr/bin/env perl';
 my $bascmd = "$perl $script";
 my $cmd    = "$bascmd -version $ver\_$ass -species $sp -dir $data_path\/vep-cache/ -quiet";
+
+ok(-e $script, "script exists");
+
+# check for tabix and bgzip
+unless(`which tabix` =~ /tabix/ && `which bgzip` =~ /bgzip/) {
+  print STDERR "# tabix and/or bgzip not found, skipping convert_cache tests\n";
+  done_testing();
+  exit(0);
+}
 
 # backup info.txt
 copy("$data_path\/vep-cache/$sp/$ver\_$ass/info.txt", "$data_path\/vep-cache/$sp/$ver\_$ass/info.txt.bak");
