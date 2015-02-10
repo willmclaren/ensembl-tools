@@ -1,7 +1,7 @@
 #!/usr/bin/env perl
 
 use Getopt::Long;
-use File::Path;
+use File::Path qw(mkpath rmtree);
 use File::Copy;
 use File::Basename;
 use Archive::Extract;
@@ -58,7 +58,7 @@ my $lib_dir = $DEST_DIR;
 
 $DEST_DIR       .= '/Bio';
 $ENS_GIT_ROOT ||= 'https://github.com/Ensembl/';
-$BIOPERL_URL  ||= 'http://bioperl.org/DIST/BioPerl-1.6.1.tar.gz';
+$BIOPERL_URL  ||= 'https://github.com/bioperl/bioperl-live/archive/release-1-6-924.zip';
 $API_VERSION  ||= $VERSION;
 $CACHE_URL    ||= "ftp://ftp.ensembl.org/pub/release-$API_VERSION/variation/VEP";
 $CACHE_DIR    ||= $ENV{HOME} ? $ENV{HOME}.'/.vep' : 'cache';
@@ -149,7 +149,7 @@ if($UPDATE) {
       closedir NEWDIR;
       
       foreach my $new_file(@new_files) {
-        if(-e $new_file) {
+        if(-e $new_file || -d $new_file) {
           print "Backing up $new_file to $new_file\.bak\_$VERSION\n";
           move($new_file, "$new_file\.bak\_$VERSION");
           move($tmpdir.'/ensembl-tools-release-'.$hash->{release}.'/scripts/variant_effect_predictor/'.$new_file, $new_file);
@@ -334,6 +334,24 @@ foreach my $module(qw(ensembl ensembl-variation ensembl-funcgen)) {
   }
   elsif($module eq 'ensembl-variation') {
     move("$DEST_DIR/tmp/$module\-release-$API_VERSION/modules/Bio/EnsEMBL/Variation", "$DEST_DIR/EnsEMBL/Variation") or die "ERROR: Could not move directory\n".$!;
+    
+    # move test data
+    my $test_target = "$DEST_DIR/../t/testdata/";
+    mkpath($test_target) unless -d $test_target;
+    
+    opendir TESTDATA, "$DEST_DIR/tmp/$module\-release-$API_VERSION/modules/t/testdata" or die "ERROR: Could not find ensembl-variation/modules/t/testdata directory";
+    
+    foreach my $f(grep {!/^\./} readdir TESTDATA) {
+      if(-d $test_target.$f) {
+        rmtree($test_target.$f) or die "ERROR: Could not remove $test_target$f\n".$!;
+      }
+      elsif(-e $test_target.$f) {
+        unlink($test_target.$f) or die "ERROR: Could not remove $test_target$f\n".$!;
+      }
+
+      move("$DEST_DIR/tmp/$module\-release-$API_VERSION/modules/t/testdata/$f", $test_target.$f) or die "ERROR: Could not move $DEST_DIR/tmp/$module\-release-$API_VERSION/modules/t/testdata/$f to $test_target$f".$!;
+    }
+    closedir TESTDATA;
   }
   elsif($module eq 'ensembl-funcgen') {
     move("$DEST_DIR/tmp/$module\-release-$API_VERSION/modules/Bio/EnsEMBL/Funcgen", "$DEST_DIR/EnsEMBL/Funcgen") or die "ERROR: Could not move directory\n".$!;
@@ -361,8 +379,16 @@ unpack_arch("$DEST_DIR/tmp/$bioperl_file", "$DEST_DIR/tmp/");
 
 print " - moving files\n" unless $QUIET;
 
-$bioperl_file =~ /(bioperl.+?)\.tar\.gz/i;
-my $bioperl_dir = $1;
+my $bioperl_dir;
+
+if($BIOPERL_URL =~ /github/) {
+  $bioperl_file =~ s/\.zip//;
+  $bioperl_dir = "bioperl-live-".$bioperl_file;
+}
+else {
+  $bioperl_file =~ /(bioperl.+?)\.tar\.gz/i;
+  $bioperl_dir = $1;
+}
 
 opendir BIO, "$DEST_DIR/tmp/$bioperl_dir/Bio/";
 move("$DEST_DIR/tmp/$bioperl_dir/Bio/$_", "$DEST_DIR/$_") for readdir BIO;
@@ -376,19 +402,30 @@ rmtree("$DEST_DIR/tmp") or die "ERROR: Failed to remove directory $DEST_DIR/tmp\
 ######
 
 print "\nTesting VEP script\n" unless $QUIET;
-my $test_vep = `perl -I $DEST_DIR $dirname/variant_effect_predictor.pl --help 2>&1`;
 
-$test_vep =~ /ENSEMBL VARIANT EFFECT PREDICTOR/ or die "ERROR: Testing VEP script failed with the following error\n$test_vep\n";
+eval q{use Test::Harness};
+if(!$@) {
+  $ENV{PERL5LIB} = $ENV{PERL5LIB} ? $ENV{PERL5LIB}.':'.$DEST_DIR : $DEST_DIR;
+  opendir TEST, "$dirname\/t";
+  my @test_files = map {"$dirname\/t\/".$_} grep {!/^\./ && /\.t$/} readdir TEST;
+  closedir TEST;
+  
+  print "Warning: Tests failed, VEP may not run correctly\n" unless runtests(@test_files);
+}
+else {
+  my $test_vep = `perl -I $DEST_DIR $dirname/variant_effect_predictor.pl --help 2>&1`;
+
+  $test_vep =~ /ENSEMBL VARIANT EFFECT PREDICTOR/ or die "ERROR: Testing VEP script failed with the following error\n$test_vep\n";
+}
 
 print " - OK!\n" unless $QUIET;
+
+
 
 # CACHE FILES
 #############
 
 CACHE:
-
-print "\nThe VEP can either connect to remote or local databases, or use local cache files.\nUsing local cache files is the fastest and most efficient way to run the VEP\n" unless $QUIET;
-print "Cache files will be stored in $CACHE_DIR\n" unless $QUIET;
 
 my $ok;
 
@@ -396,6 +433,9 @@ if($AUTO) {
   $ok = $AUTO =~ /c/i ? 'y' : 'n';
 }
 else {
+  print "\nThe VEP can either connect to remote or local databases, or use local cache files.\nUsing local cache files is the fastest and most efficient way to run the VEP\n" unless $QUIET;
+  print "Cache files will be stored in $CACHE_DIR\n" unless $QUIET;
+  
   print "Do you want to install any cache files (y/n)? ";
   
   $ok = <>;
@@ -637,13 +677,12 @@ if((grep {$files[$_ - 1] =~ /GRCh37/} @indexes) || (defined($ASSEMBLY) && $ASSEM
   }
 }
 
-print "\nThe VEP can use FASTA files to retrieve sequence data for HGVS notations and reference sequence checks.\n" unless $QUIET;
-print "FASTA files will be stored in $CACHE_DIR\n" unless $QUIET;
-
 if($AUTO) {
   $ok = $AUTO =~ /f/i ? 'y' : 'n';
 }
 else {
+  print "\nThe VEP can use FASTA files to retrieve sequence data for HGVS notations and reference sequence checks.\n" unless $QUIET;
+  print "FASTA files will be stored in $CACHE_DIR\n" unless $QUIET;
   print "Do you want to install any FASTA files (y/n)? ";
   
   $ok = <>;
