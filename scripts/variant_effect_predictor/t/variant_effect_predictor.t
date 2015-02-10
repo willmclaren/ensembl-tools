@@ -86,8 +86,15 @@ $expected = '21\s25606454\stest\sG\sC\s.\s.\sCSQ=C|ENSG00000154719|ENST000004192
 ok($output =~ /$expected/, "VCF output") or diag("Expected\n$expected\n\nGot\n$output");
 
 # json
-$output = `$cmd --json`;
-ok($output =~ /^\{.*"most_severe_consequence":"missense_variant".*\}\n?$/, "JSON output");
+eval q{ use JSON; };
+
+if(!$@) {
+  $output = `$cmd --json`;
+  ok($output =~ /^\{.*"most_severe_consequence":"missense_variant".*\}\n?$/, "JSON output");
+}
+else {
+  print STDERR "# could not find JSON perl module, skipping test\n";
+}
 
 # GVF
 $output = `$cmd --gvf`;
