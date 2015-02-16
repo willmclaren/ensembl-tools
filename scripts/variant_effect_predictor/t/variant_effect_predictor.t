@@ -6,6 +6,7 @@ BEGIN { $| = 1;
 }
 
 use FindBin qw($Bin);
+use File::Copy;
 use Data::Dumper;
 use lib $Bin.'/../';
 use Bio::EnsEMBL::Variation::Utils::VEP;
@@ -144,6 +145,20 @@ $input = qq{##fileformat=VCFv4.0
 input($input);
 $output = `$cmd --individual all`;
 ok($output =~ /IND=A/ && $output !~ /IND=B/ && $output =~ /ZYG=HOM/, "individual");
+
+# html output
+move('stdout.html', 'stdout.html.bak'.$$) if -e 'stdout.html';
+input(qq{21 25606454 25606454 G/C + test});
+$output = `$cmd --html`;
+
+ok(-e 'stdout.html', "HTML output exists");
+
+open HTML, "stdout.html";
+@lines = <HTML>;
+ok((grep {/\<title\>VEP output\<\/title\>/} @lines), "HTML output content");
+
+unlink('stdout.html');
+move('stdout.html.bak'.$$, 'stdout.html') if -e 'stdout.html.bak'.$$;
 
 
 
